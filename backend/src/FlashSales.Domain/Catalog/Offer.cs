@@ -1,3 +1,4 @@
+using FlashSales.Domain.Ordering.Commissions;
 using FlashSales.Domain.Shared;
 
 namespace FlashSales.Domain.Catalog;
@@ -14,7 +15,8 @@ public sealed record Offer(
     Money Price,
     int Stock,
     DateTimeOffset StartsAt,
-    DateTimeOffset EndsAt)
+    DateTimeOffset EndsAt,
+    SellerTier SellerTier = SellerTier.Standard)
 {
     public static class Errors
     {

@@ -1,4 +1,5 @@
 using FlashSales.Domain.Catalog;
+using FlashSales.Domain.Ordering.Commissions;
 using FlashSales.Domain.Shared;
 
 namespace FlashSales.UnitTests.TestDoubles;
@@ -17,6 +18,7 @@ public class OfferBuilder
     private int _stock = 10;
     private DateTimeOffset _startsAt = DateTimeOffset.UtcNow.AddHours(-1);
     private DateTimeOffset _endsAt = DateTimeOffset.UtcNow.AddHours(1);
+    private SellerTier _sellerTier = SellerTier.Standard;
 
     public OfferBuilder WithId(Guid id) { _id = id; return this; }
     public OfferBuilder WithSeller(Guid sellerId) { _sellerId = sellerId; return this; }
@@ -32,5 +34,8 @@ public class OfferBuilder
         return this;
     }
 
-    public Offer Build() => new(_id, _sellerId, _name, _description, _price, _stock, _startsAt, _endsAt);
+    public OfferBuilder WithSellerTier(SellerTier tier) { _sellerTier = tier; return this; }
+
+    public Offer Build() =>
+        new(_id, _sellerId, _name, _description, _price, _stock, _startsAt, _endsAt, _sellerTier);
 }
