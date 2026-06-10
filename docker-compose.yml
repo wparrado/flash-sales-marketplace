@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: flashsales-postgres
+    environment:
+      POSTGRES_USER: flashsales
+      POSTGRES_PASSWORD: flashsales
+      POSTGRES_DB: flashsales
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flashsales"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  # Optional: local OTLP backend to visualize traces (vendor-agnostic).
+  jaeger:
+    image: jaegertracing/all-in-one:1.60
+    container_name: flashsales-jaeger
+    ports:
+      - "16686:16686" # UI
+      - "4317:4317"   # OTLP gRPC
+    profiles: ["observability"]
+
+volumes:
+  pgdata:

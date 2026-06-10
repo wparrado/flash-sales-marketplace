@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FlashSales.Api/FlashSales.Api.csproj" />
+    <Project Path="src/FlashSales.Application/FlashSales.Application.csproj" />
+    <Project Path="src/FlashSales.Domain/FlashSales.Domain.csproj" />
+    <Project Path="src/FlashSales.Infrastructure/FlashSales.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FlashSales.ArchitectureTests/FlashSales.ArchitectureTests.csproj" />
+    <Project Path="tests/FlashSales.IntegrationTests/FlashSales.IntegrationTests.csproj" />
+    <Project Path="tests/FlashSales.UnitTests/FlashSales.UnitTests.csproj" />
+  </Folder>
+</Solution>
