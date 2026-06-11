@@ -16,24 +16,42 @@ public static class CatalogEndpoints
 
         catalog.MapGet("/offers",
             async (IOfferReadRepository reads, CancellationToken ct, int limit = 50) =>
-                Results.Ok(await reads.GetActiveAsync(Math.Clamp(limit, 1, 200), ct)));
+                Results.Ok(await reads.GetActiveAsync(Math.Clamp(limit, 1, 200), ct)))
+            .WithTags("Catalog")
+            .WithSummary("List active flash-sale offers")
+            .WithDescription("Returns all currently active offers (started and not yet ended). Results are served from a read-optimised projection; no write-side aggregates are loaded.")
+            .Produces(StatusCodes.Status200OK)
+;
 
         catalog.MapGet("/offers/{offerId:guid}",
             async (Guid offerId, IOfferReadRepository reads, HttpContext http, CancellationToken ct) =>
                 await reads.GetByIdAsync(offerId, ct) is { } offer
                     ? Results.Ok(offer)
                     : Results.NotFound(new ErrorResponse(
-                        "offer.not_found", $"Offer {offerId} does not exist.", http.CorrelationId())));
+                        "offer.not_found", $"Offer {offerId} does not exist.", http.CorrelationId())))
+            .WithTags("Catalog")
+            .WithSummary("Get a single offer by ID")
+            .Produces(StatusCodes.Status200OK)
+            .Produces<ErrorResponse>(StatusCodes.Status404NotFound)
+;
 
-        // Hot path: answered from process memory (read-through cache), built to
-        // survive thousands of concurrent stock polls without touching Postgres.
         catalog.MapGet("/offers/{offerId:guid}/stock",
             async (Guid offerId, IInventoryCache cache, CancellationToken ct) =>
-                Results.Ok(new StockResponse(offerId, await cache.GetStockAsync(offerId, ct))));
+                Results.Ok(new StockResponse(offerId, await cache.GetStockAsync(offerId, ct))))
+            .WithTags("Catalog")
+            .WithSummary("Get real-time stock for an offer")
+            .WithDescription("Served from process-memory read-through cache. Suitable for high-frequency polling on the product page.")
+            .Produces<StockResponse>(StatusCodes.Status200OK)
+;
 
         catalog.MapGet("/search",
             (string q, ISearchEngine search, int limit = 20) =>
-                Results.Ok(search.Search(q, maxDistance: 2, limit: Math.Clamp(limit, 1, 100))));
+                Results.Ok(search.Search(q, maxDistance: 2, limit: Math.Clamp(limit, 1, 100))))
+            .WithTags("Catalog")
+            .WithSummary("Fuzzy-search offers by name")
+            .WithDescription("In-memory Levenshtein search (max edit distance 2) over normalised, diacritic-free tokens. Example: `?q=nintnedo` returns \"Nintendo Switch 2\".")
+            .Produces(StatusCodes.Status200OK)
+;
 
         return app;
     }
