@@ -13,6 +13,7 @@ builder.Services.AddInfrastructure(
 
 builder.Services.AddJwtAuth(builder.Configuration);
 builder.Services.AddCheckoutBulkhead(builder.Configuration);
+builder.Services.AddFlashSalesOpenApi();
 
 builder.Services.AddCors(cors => cors.AddDefaultPolicy(policy => policy
     .WithOrigins(builder.Configuration.GetValue("Cors:AllowedOrigin", "http://localhost:5173")!)
@@ -27,6 +28,7 @@ app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
+app.UseFlashSalesOpenApi();
 
 app.MapAuthEndpoints();
 app.MapCatalogEndpoints();
