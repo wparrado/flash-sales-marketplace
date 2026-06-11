@@ -17,7 +17,12 @@ public static class AuthEndpoints
                     new ErrorResponse(
                         "auth.invalid_credentials", "Invalid username or password.", http.CorrelationId()),
                     statusCode: StatusCodes.Status401Unauthorized);
-        });
+        })
+        .WithTags("Auth")
+        .WithSummary("Authenticate and obtain a JWT token")
+        .WithDescription("Validates credentials and returns a short-lived JWT Bearer token. Pass the token in `Authorization: Bearer <token>` on protected endpoints.")
+        .Produces<LoginResponse>(StatusCodes.Status200OK)
+        .Produces<ErrorResponse>(StatusCodes.Status401Unauthorized);
 
         return app;
     }
