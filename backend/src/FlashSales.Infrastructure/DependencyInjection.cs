@@ -3,6 +3,7 @@ using FlashSales.Application.Ports;
 using FlashSales.Application.UseCases.ProcessOrder;
 using FlashSales.Application.UseCases.ProcessOrder.Steps;
 using FlashSales.Infrastructure.Caching;
+using FlashSales.Infrastructure.Outbox;
 using FlashSales.Infrastructure.Payments;
 using FlashSales.Infrastructure.Persistence;
 using FlashSales.Infrastructure.Search;
@@ -34,11 +35,17 @@ public static class DependencyInjection
         services.AddMemoryCache();
         services.AddScoped<IInventoryCache, InMemoryInventoryCache>();
 
-        // Search: in-memory fuzzy engine, hydrated at startup, updated in-process.
-        // Swapping to Elasticsearch == replacing these three registrations.
+        // Search: in-memory fuzzy engine, hydrated at startup.
+        // Swapping to Elasticsearch == replacing these registrations.
         services.AddSingleton<ISearchEngine, LevenshteinSearchEngine>();
-        services.AddScoped<IOfferIndexUpdater, InProcessOfferIndexUpdater>();
         services.AddHostedService<SearchIndexInitializer>();
+
+        // Transactional outbox: events persist with the business change; the
+        // dispatcher projects them onto the read models (cache + search index).
+        // A future broker relay replaces only the dispatcher's fan-out.
+        services.AddScoped<IOutbox, EfOutbox>();
+        services.AddScoped<OutboxProcessor>();
+        services.AddHostedService<OutboxDispatcher>();
 
         // Payments: simulated provider wrapped in the Polly resilience pipeline.
         services.AddSingleton(PaymentResilienceOptions.Default);
@@ -60,8 +67,7 @@ public static class DependencyInjection
             sp.GetRequiredService<IStockAuthority>(),
             sp.GetRequiredService<IOrderRepository>(),
             sp.GetRequiredService<IPaymentGateway>(),
-            sp.GetRequiredService<IInventoryCache>(),
-            sp.GetRequiredService<IOfferIndexUpdater>(),
+            sp.GetRequiredService<IOutbox>(),
             sp.GetRequiredService<IUnitOfWork>(),
             sp.GetRequiredService<TimeProvider>()));
 

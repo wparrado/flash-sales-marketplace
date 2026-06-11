@@ -129,22 +129,75 @@ public sealed class CheckoutFlowTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     [Fact]
-    public async Task FuzzySearch_FindsOffer_WithLiveStock_AfterCheckoutUpdatesTheIndex()
+    public async Task FuzzySearch_FindsOffer_WithLiveStock_AfterTheOutboxProjectsTheCheckout()
     {
         var offer = await _factory.SeedOfferAsync(NewOffer(stock: 5) with { Name = "Quadrocopter Apex" });
         var token = await LoginAsync();
 
-        // The checkout triggers the in-process index update for this offer.
+        // The checkout enqueues OfferStockChanged; the outbox dispatcher
+        // projects it onto the search index shortly after (eventual consistency).
         (await CheckoutAsync(token, offer.Id, quantity: 1))
             .StatusCode.Should().Be(HttpStatusCode.Created);
 
         // Typo on purpose: "quadrocoptre" is 2 edits from "quadrocopter".
-        var results = await _client.GetFromJsonAsync<List<CatalogOffer>>(
-            "/api/catalog/search?q=quadrocoptre");
+        var indexed = await WaitUntilAsync(async () =>
+        {
+            var results = await _client.GetFromJsonAsync<List<CatalogOffer>>(
+                "/api/catalog/search?q=quadrocoptre");
+            return results?.SingleOrDefault(o => o.Id == offer.Id);
+        }, found => found is { Stock: 4 }, timeout: TimeSpan.FromSeconds(10));
 
-        results.Should().Contain(o => o.Id == offer.Id, "fuzzy matching must tolerate typos");
-        results!.Single(o => o.Id == offer.Id).Stock
-            .Should().Be(4, "the search read model carries the post-checkout stock");
+        indexed.Should().NotBeNull("fuzzy matching must tolerate typos");
+        indexed!.Stock.Should().Be(4, "the search read model carries the post-checkout stock");
+    }
+
+    [Fact]
+    public async Task ReplayedCheckout_WithIdempotencyKey_ReturnsTheSameOrder_AndChargesOnce()
+    {
+        var offer = await _factory.SeedOfferAsync(NewOffer(stock: 5));
+        var token = await LoginAsync();
+        var key = $"idem-{Guid.NewGuid():N}";
+
+        var first = await CheckoutWithKeyAsync(token, offer.Id, key);
+        var second = await CheckoutWithKeyAsync(token, offer.Id, key);
+
+        first.StatusCode.Should().Be(HttpStatusCode.Created);
+        second.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var firstOrder = await first.Content.ReadFromJsonAsync<OrderBody>();
+        var secondOrder = await second.Content.ReadFromJsonAsync<OrderBody>();
+        secondOrder!.OrderId.Should().Be(firstOrder!.OrderId, "a replay returns the recorded outcome");
+
+        (await _factory.ReadStockAsync(offer.Id)).Should().Be(4, "stock must be decremented exactly once");
+    }
+
+    private async Task<HttpResponseMessage> CheckoutWithKeyAsync(string token, Guid offerId, string key)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/checkout/orders")
+        {
+            Content = JsonContent.Create(new
+            {
+                offerId, quantity = 1, paymentMethod = "CreditCard", couponCode = (string?)null
+            })
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Add("Idempotency-Key", key);
+        return await _client.SendAsync(request);
+    }
+
+    /// <summary>Polls until the projection lands or the timeout expires (eventual consistency).</summary>
+    private static async Task<T?> WaitUntilAsync<T>(
+        Func<Task<T?>> probe, Func<T?, bool> done, TimeSpan timeout)
+    {
+        var deadline = DateTimeOffset.UtcNow + timeout;
+        T? last = default;
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            last = await probe();
+            if (done(last)) return last;
+            await Task.Delay(200);
+        }
+        return last;
     }
 
     [Fact]

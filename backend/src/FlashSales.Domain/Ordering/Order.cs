@@ -26,6 +26,9 @@ public sealed record Order
     public string? FailureReason { get; init; }
     public DateTimeOffset PlacedAt { get; init; }
 
+    /// <summary>Client-supplied replay-protection key; unique per buyer when present.</summary>
+    public string? IdempotencyKey { get; init; }
+
     public static Order Place(
         Guid buyerId,
         Guid sellerId,
@@ -33,7 +36,8 @@ public sealed record Order
         decimal taxRate,
         Money discount,
         ICommissionStrategy commissionStrategy,
-        DateTimeOffset placedAt) => new()
+        DateTimeOffset placedAt,
+        string? idempotencyKey = null) => new()
     {
         Id = Guid.NewGuid(),
         BuyerId = buyerId,
@@ -41,7 +45,8 @@ public sealed record Order
         Lines = lines,
         Totals = OrderPricing.Calculate(lines, taxRate, discount, commissionStrategy),
         Status = OrderStatus.PendingPayment,
-        PlacedAt = placedAt
+        PlacedAt = placedAt,
+        IdempotencyKey = idempotencyKey
     };
 
     public Order Confirm(string paymentReference) =>

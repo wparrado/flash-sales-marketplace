@@ -1,3 +1,4 @@
+using FlashSales.Infrastructure.Outbox;
 using Microsoft.EntityFrameworkCore;
 
 namespace FlashSales.Infrastructure.Persistence;
@@ -6,6 +7,7 @@ public class FlashSalesDbContext(DbContextOptions<FlashSalesDbContext> options) 
 {
     public DbSet<OfferEntity> Offers => Set<OfferEntity>();
     public DbSet<OrderEntity> Orders => Set<OrderEntity>();
+    public DbSet<OutboxMessageEntity> OutboxMessages => Set<OutboxMessageEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -39,6 +41,12 @@ public class FlashSalesDbContext(DbContextOptions<FlashSalesDbContext> options) 
             order.Property(o => o.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(20);
             order.Property(o => o.PaymentReference).HasColumnName("payment_reference").HasMaxLength(100);
             order.Property(o => o.FailureReason).HasColumnName("failure_reason").HasMaxLength(500);
+            order.Property(o => o.IdempotencyKey).HasColumnName("idempotency_key").HasMaxLength(100);
+            // Data-integrity backstop for the handler's replay check: two
+            // concurrent requests with the same key cannot both insert.
+            order.HasIndex(o => new { o.BuyerId, o.IdempotencyKey })
+                .IsUnique()
+                .HasFilter("idempotency_key IS NOT NULL");
             order.Property(o => o.PlacedAt).HasColumnName("placed_at");
             order.Property(o => o.Subtotal).HasColumnName("subtotal").HasPrecision(18, 2);
             order.Property(o => o.Discount).HasColumnName("discount").HasPrecision(18, 2);
@@ -48,6 +56,19 @@ public class FlashSalesDbContext(DbContextOptions<FlashSalesDbContext> options) 
             order.Property(o => o.SellerPayout).HasColumnName("seller_payout").HasPrecision(18, 2);
             order.Property(o => o.Currency).HasColumnName("currency").HasMaxLength(3);
             order.HasMany(o => o.Lines).WithOne().HasForeignKey(l => l.OrderId);
+        });
+
+        modelBuilder.Entity<OutboxMessageEntity>(message =>
+        {
+            // Lives with the write side that produces the events.
+            message.ToTable("outbox_messages", "ordering");
+            message.HasKey(m => m.Id);
+            message.Property(m => m.Id).HasColumnName("id");
+            message.Property(m => m.EventType).HasColumnName("event_type").HasMaxLength(200);
+            message.Property(m => m.Payload).HasColumnName("payload").HasColumnType("jsonb");
+            message.Property(m => m.OccurredAt).HasColumnName("occurred_at");
+            message.Property(m => m.ProcessedAt).HasColumnName("processed_at");
+            message.HasIndex(m => m.ProcessedAt).HasFilter("processed_at IS NULL");
         });
 
         modelBuilder.Entity<OrderLineEntity>(line =>

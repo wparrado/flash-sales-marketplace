@@ -32,7 +32,8 @@ public static class CheckoutEndpoints
 
             var command = new ProcessOrderCommand(
                 request.OfferId, buyerId.Value, request.Quantity,
-                request.PaymentMethod, request.CouponCode);
+                request.PaymentMethod, request.CouponCode,
+                IdempotencyKey: http.Request.Headers["Idempotency-Key"].FirstOrDefault());
 
             var result = await handler.HandleAsync(command, ct);
 

@@ -49,6 +49,7 @@ public class OrderEntity
     public OrderStatus Status { get; set; }
     public string? PaymentReference { get; set; }
     public string? FailureReason { get; set; }
+    public string? IdempotencyKey { get; set; }
     public DateTimeOffset PlacedAt { get; set; }
     public decimal Subtotal { get; set; }
     public decimal Discount { get; set; }
@@ -67,6 +68,7 @@ public class OrderEntity
         Status = order.Status,
         PaymentReference = order.PaymentReference,
         FailureReason = order.FailureReason,
+        IdempotencyKey = order.IdempotencyKey,
         PlacedAt = order.PlacedAt,
         Subtotal = order.Totals.Subtotal.Amount,
         Discount = order.Totals.Discount.Amount,
@@ -84,6 +86,29 @@ public class OrderEntity
         PaymentReference = order.PaymentReference;
         FailureReason = order.FailureReason;
     }
+
+    /// <summary>Reconstructs the domain aggregate (used by idempotent replay lookups).</summary>
+    public Order ToDomain() => new()
+    {
+        Id = Id,
+        BuyerId = BuyerId,
+        SellerId = SellerId,
+        Lines = Lines
+            .Select(l => new OrderLine(l.OfferId, l.OfferName, new Money(l.UnitPrice, Currency), l.Quantity))
+            .ToList(),
+        Totals = new OrderTotals(
+            Subtotal: new Money(Subtotal, Currency),
+            Discount: new Money(Discount, Currency),
+            Tax: new Money(Tax, Currency),
+            Total: new Money(Total, Currency),
+            Commission: new Money(Commission, Currency),
+            SellerPayout: new Money(SellerPayout, Currency)),
+        Status = Status,
+        PaymentReference = PaymentReference,
+        FailureReason = FailureReason,
+        IdempotencyKey = IdempotencyKey,
+        PlacedAt = PlacedAt
+    };
 }
 
 public class OrderLineEntity

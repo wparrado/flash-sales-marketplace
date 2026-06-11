@@ -18,4 +18,13 @@ public sealed class OrderRepository(FlashSalesDbContext db) : IOrderRepository
         entity.ApplyStatus(order);
         await db.SaveChangesAsync(ct);
     }
+
+    public async Task<Order?> FindByIdempotencyKeyAsync(
+        Guid buyerId, string idempotencyKey, CancellationToken ct)
+    {
+        var entity = await db.Orders.AsNoTracking()
+            .Include(o => o.Lines)
+            .FirstOrDefaultAsync(o => o.BuyerId == buyerId && o.IdempotencyKey == idempotencyKey, ct);
+        return entity?.ToDomain();
+    }
 }

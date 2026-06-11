@@ -22,8 +22,7 @@ public sealed class ProcessOrderHandler(
     IStockAuthority stock,
     IOrderRepository orders,
     IPaymentGateway payments,
-    IInventoryCache cache,
-    IOfferIndexUpdater indexUpdater,
+    IOutbox outbox,
     IUnitOfWork unitOfWork,
     TimeProvider clock)
 {
@@ -41,6 +40,16 @@ public sealed class ProcessOrderHandler(
     public async Task<Result<OrderConfirmation>> HandleAsync(
         ProcessOrderCommand command, CancellationToken ct)
     {
+        // Replay protection: a retried request (network blip, double click,
+        // at-least-once delivery) returns the recorded outcome instead of
+        // reserving stock or charging again.
+        if (command.IdempotencyKey is { Length: > 0 } idempotencyKey)
+        {
+            var existing = await orders.FindByIdempotencyKeyAsync(command.BuyerId, idempotencyKey, ct);
+            if (existing is not null)
+                return Result<OrderConfirmation>.Success(ToConfirmation(existing));
+        }
+
         var validated = await RunValidationChainAsync(new OrderContext(command), ct);
         if (validated.IsFailure)
             return Result<OrderConfirmation>.Failure(validated.Error);
@@ -90,6 +99,13 @@ public sealed class ProcessOrderHandler(
 
             var order = PlaceOrder(offer, context);
             await orders.AddAsync(order, innerCt);
+
+            // Same transaction as the decrement: the event exists if and only
+            // if the stock change committed. The dispatcher fans it out to the
+            // cache and search index (and to a broker, in a distributed setup).
+            await outbox.EnqueueAsync(
+                new OfferStockChanged(offer.Id, stockAfter.Value, clock.GetUtcNow()), innerCt);
+
             return Result<StockReservation>.Success(new StockReservation(order, stockAfter.Value));
         }, ct);
 
@@ -105,7 +121,8 @@ public sealed class ProcessOrderHandler(
             taxRate: TaxRate,
             discount: subtotal.ApplyRate(context.DiscountRate),
             commissionStrategy: CommissionStrategySelector.ForTier(offer.SellerTier),
-            placedAt: clock.GetUtcNow());
+            placedAt: clock.GetUtcNow(),
+            idempotencyKey: context.Command.IdempotencyKey);
     }
 
     private async Task<Result<OrderConfirmation>> ChargeAndSettleAsync(
@@ -116,42 +133,41 @@ public sealed class ProcessOrderHandler(
             new PaymentRequest(order.Id, order.Totals.Total, command.PaymentMethod, order.BuyerId), ct);
 
         return payment.Succeeded
-            ? await ConfirmAsync(offer, reservation, payment.Reference!, ct)
+            ? await ConfirmAsync(reservation, payment.Reference!, ct)
             : await CompensateAsync(offer, reservation, command, payment, ct);
     }
 
     /// <summary>
     /// Saga compensation: payment failed after stock was reserved, so the
     /// reservation is rolled back and the failed order is kept for audit.
-    /// The cache entry is invalidated (not recomputed) — the next read
-    /// repopulates from the authoritative database.
+    /// Read models learn about the restored stock through the outbox event.
     /// </summary>
     private async Task<Result<OrderConfirmation>> CompensateAsync(
         Offer offer, StockReservation reservation, ProcessOrderCommand command,
         Contracts.PaymentResult payment, CancellationToken ct)
     {
-        await stock.RestoreStockAsync(offer.Id, command.Quantity, ct);
-        await cache.InvalidateAsync(offer.Id, ct);
+        var restoredStock = await stock.RestoreStockAsync(offer.Id, command.Quantity, ct);
+        await outbox.EnqueueAsync(new OfferStockChanged(offer.Id, restoredStock, clock.GetUtcNow()), ct);
         await orders.UpdateAsync(reservation.Order.Fail(payment.FailureReason ?? "payment.rejected"), ct);
 
         return Result<OrderConfirmation>.Failure(Errors.PaymentRejected(payment.FailureReason));
     }
 
     private async Task<Result<OrderConfirmation>> ConfirmAsync(
-        Offer offer, StockReservation reservation, string paymentReference, CancellationToken ct)
+        StockReservation reservation, string paymentReference, CancellationToken ct)
     {
         var confirmed = reservation.Order.Confirm(paymentReference);
         await orders.UpdateAsync(confirmed, ct);
-        await cache.SetStockAsync(offer.Id, reservation.StockAfter, ct);
-        await indexUpdater.OfferStockChangedAsync(offer.Id, reservation.StockAfter, ct);
 
-        return Result<OrderConfirmation>.Success(new OrderConfirmation(
-            confirmed.Id,
-            confirmed.Status,
-            confirmed.Totals.Total.Amount,
-            confirmed.Totals.Total.Currency,
-            confirmed.PaymentReference));
+        return Result<OrderConfirmation>.Success(ToConfirmation(confirmed));
     }
+
+    private static OrderConfirmation ToConfirmation(Order order) => new(
+        order.Id,
+        order.Status,
+        order.Totals.Total.Amount,
+        order.Totals.Total.Currency,
+        order.PaymentReference);
 
     private sealed record StockReservation(Order Order, int StockAfter);
 }

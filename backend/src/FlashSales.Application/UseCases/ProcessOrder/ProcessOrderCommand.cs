@@ -5,7 +5,8 @@ public sealed record ProcessOrderCommand(
     Guid BuyerId,
     int Quantity,
     string PaymentMethod,
-    string? CouponCode = null);
+    string? CouponCode = null,
+    string? IdempotencyKey = null);
 
 public sealed record OrderConfirmation(
     Guid OrderId,

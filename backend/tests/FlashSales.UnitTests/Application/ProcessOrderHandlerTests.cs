@@ -1,4 +1,5 @@
 using AwesomeAssertions;
+using FlashSales.Application.Contracts;
 using FlashSales.Application.UseCases.ProcessOrder;
 using FlashSales.Application.UseCases.ProcessOrder.Steps;
 using FlashSales.Domain.Catalog;
@@ -20,7 +21,7 @@ public class ProcessOrderHandlerTests
     private readonly InMemoryOrderRepository _orders = new();
     private readonly FakeInventoryCache _cache = new();
     private readonly FakePaymentGateway _payments = new();
-    private readonly FakeOfferIndexUpdater _indexUpdater = new();
+    private readonly FakeOutbox _outbox = new();
     private readonly FakeTimeProvider _clock = new(Now);
 
     private ProcessOrderHandler CreateHandler() => new(
@@ -34,8 +35,7 @@ public class ProcessOrderHandlerTests
         stock: _offers,
         orders: _orders,
         payments: _payments,
-        cache: _cache,
-        indexUpdater: _indexUpdater,
+        outbox: _outbox,
         unitOfWork: new FakeUnitOfWork(),
         clock: _clock);
 
@@ -133,7 +133,7 @@ public class ProcessOrderHandlerTests
     }
 
     [Fact]
-    public async Task WhenPaymentFails_RestoresStock_InvalidatesCache_AndPersistsFailedOrder()
+    public async Task WhenPaymentFails_RestoresStock_PersistsFailedOrder_AndEmitsRestoredStockEvent()
     {
         var offer = SeedActiveOffer(stock: 10);
         _payments.NextResult = new(Succeeded: false, Reference: null,
@@ -143,19 +143,51 @@ public class ProcessOrderHandlerTests
 
         result.Error.Code.Should().Be("payment.rejected");
         _offers.Find(offer.Id)!.Stock.Should().Be(10, "reserved stock must be restored (compensation)");
-        _cache.InvalidateCalls.Should().Contain(offer.Id);
         _orders.All.Should().ContainSingle(o => o.Status == OrderStatus.Failed);
+        _outbox.Events.OfType<OfferStockChanged>().Last()
+            .Should().Be(new OfferStockChanged(offer.Id, 10, Now),
+                "read models must learn about the restored stock through the outbox");
     }
 
     [Fact]
-    public async Task OnSuccess_UpdatesInventoryCache_AndNotifiesSearchIndex()
+    public async Task OnSuccess_EmitsOfferStockChanged_ThroughTheTransactionalOutbox()
     {
         var offer = SeedActiveOffer(stock: 10);
 
         await CreateHandler().HandleAsync(Command(offer, quantity: 3), CancellationToken.None);
 
-        _cache.SetCalls.Should().Contain((offer.Id, 7));
-        _indexUpdater.Notifications.Should().Contain((offer.Id, 7));
+        _outbox.Events.OfType<OfferStockChanged>().Should().ContainSingle()
+            .Which.Should().Be(new OfferStockChanged(offer.Id, 7, Now),
+                "the event is persisted with the reservation, in the same transaction");
+    }
+
+    [Fact]
+    public async Task WithIdempotencyKey_ReplayedCommand_ReturnsTheSameOrder_WithoutChargingTwice()
+    {
+        var offer = SeedActiveOffer(stock: 10);
+        var command = Command(offer, quantity: 2) with { IdempotencyKey = "idem-123" };
+
+        var first = await CreateHandler().HandleAsync(command, CancellationToken.None);
+        var second = await CreateHandler().HandleAsync(command, CancellationToken.None);
+
+        second.IsSuccess.Should().BeTrue();
+        second.Value.OrderId.Should().Be(first.Value.OrderId, "a replay must return the recorded outcome");
+        _payments.Charges.Should().HaveCount(1, "the buyer must never be charged twice");
+        _offers.Find(offer.Id)!.Stock.Should().Be(8, "stock must be decremented exactly once");
+    }
+
+    [Fact]
+    public async Task WithDifferentIdempotencyKeys_CreatesIndependentOrders()
+    {
+        var offer = SeedActiveOffer(stock: 10);
+
+        var first = await CreateHandler().HandleAsync(
+            Command(offer) with { IdempotencyKey = "key-a" }, CancellationToken.None);
+        var second = await CreateHandler().HandleAsync(
+            Command(offer) with { IdempotencyKey = "key-b" }, CancellationToken.None);
+
+        second.Value.OrderId.Should().NotBe(first.Value.OrderId);
+        _payments.Charges.Should().HaveCount(2);
     }
 
     [Fact]

@@ -62,6 +62,10 @@ public sealed class InMemoryOrderRepository : IOrderRepository
         _orders[order.Id] = order;
         return Task.CompletedTask;
     }
+
+    public Task<Order?> FindByIdempotencyKeyAsync(Guid buyerId, string idempotencyKey, CancellationToken ct) =>
+        Task.FromResult(_orders.Values.FirstOrDefault(o =>
+            o.BuyerId == buyerId && o.IdempotencyKey == idempotencyKey));
 }
 
 public sealed class FakeInventoryCache : IInventoryCache
@@ -105,13 +109,13 @@ public sealed class FakePaymentGateway : IPaymentGateway
     }
 }
 
-public sealed class FakeOfferIndexUpdater : IOfferIndexUpdater
+public sealed class FakeOutbox : IOutbox
 {
-    public List<(Guid OfferId, int NewStock)> Notifications { get; } = [];
+    public List<object> Events { get; } = [];
 
-    public Task OfferStockChangedAsync(Guid offerId, int newStock, CancellationToken ct)
+    public Task EnqueueAsync<TEvent>(TEvent domainEvent, CancellationToken ct) where TEvent : class
     {
-        Notifications.Add((offerId, newStock));
+        Events.Add(domainEvent);
         return Task.CompletedTask;
     }
 }
