@@ -47,7 +47,23 @@ public static class CheckoutEndpoints
                         confirmation.Currency,
                         confirmation.PaymentReference)),
                 onFailure: error => error.ToHttpResult(http.CorrelationId()));
-        });
+        })
+        .WithTags("Checkout")
+        .WithSummary("Place a flash-sale order")
+        .WithDescription("""
+            Processes a purchase through the full validation chain:
+            cache fast-fail → fraud rules → coupon → atomic stock reservation → payment → confirm or compensate.
+
+            Supply an `Idempotency-Key` header to make retries safe — the handler returns the recorded outcome for duplicate keys.
+            """)
+        .Produces<OrderResponse>(StatusCodes.Status201Created)
+        .Produces<ErrorResponse>(StatusCodes.Status401Unauthorized)
+        .Produces<ErrorResponse>(StatusCodes.Status402PaymentRequired)
+        .Produces<ErrorResponse>(StatusCodes.Status404NotFound)
+        .Produces<ErrorResponse>(StatusCodes.Status409Conflict)
+        .Produces<ErrorResponse>(StatusCodes.Status410Gone)
+        .Produces<ErrorResponse>(StatusCodes.Status422UnprocessableEntity)
+        .Produces<ErrorResponse>(StatusCodes.Status429TooManyRequests);
 
         return app;
     }

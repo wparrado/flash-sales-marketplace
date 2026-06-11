@@ -35,6 +35,32 @@ public static class OpenApiExtensions
 
                 return Task.CompletedTask;
             });
+
+            // Add Idempotency-Key header parameter and JWT security requirement to the checkout endpoint
+            options.AddOperationTransformer((operation, context, cancellationToken) =>
+            {
+                if (context.Description.RelativePath == "api/checkout/orders" &&
+                    string.Equals(context.Description.HttpMethod, "POST", StringComparison.OrdinalIgnoreCase))
+                {
+                    operation.Parameters ??= [];
+                    operation.Parameters.Add(new OpenApiParameter
+                    {
+                        Name = "Idempotency-Key",
+                        In = ParameterLocation.Header,
+                        Required = false,
+                        Description = "Client-generated UUID. Re-sending with the same key returns the original response without re-processing.",
+                        Schema = new OpenApiSchema { Type = JsonSchemaType.String, Format = "uuid" }
+                    });
+
+                    operation.Security ??= [];
+                    operation.Security.Add(new OpenApiSecurityRequirement
+                    {
+                        [new OpenApiSecuritySchemeReference("Bearer", null, null)] = []
+                    });
+                }
+
+                return Task.CompletedTask;
+            });
         });
 
         return services;
