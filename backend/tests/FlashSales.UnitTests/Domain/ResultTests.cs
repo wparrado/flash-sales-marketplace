@@ -1,5 +1,5 @@
 using AwesomeAssertions;
-using FlashSales.Domain.Shared;
+using FlashSales.SharedKernel;
 
 namespace FlashSales.UnitTests.Domain;
 

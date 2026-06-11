@@ -1,5 +1,5 @@
 using FlashSales.Domain.Ordering.Commissions;
-using FlashSales.Domain.Shared;
+using FlashSales.SharedKernel;
 
 namespace FlashSales.Domain.Ordering;
 

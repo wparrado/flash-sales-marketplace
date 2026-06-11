@@ -13,7 +13,8 @@ public class FlashSalesDbContext(DbContextOptions<FlashSalesDbContext> options) 
         // so table/column names are part of the repository contract.
         modelBuilder.Entity<OfferEntity>(offer =>
         {
-            offer.ToTable("offers");
+            // Per-context schemas = the database seam for a future service split.
+            offer.ToTable("offers", "inventory");
             offer.HasKey(o => o.Id);
             offer.Property(o => o.Id).HasColumnName("id");
             offer.Property(o => o.SellerId).HasColumnName("seller_id");
@@ -30,7 +31,7 @@ public class FlashSalesDbContext(DbContextOptions<FlashSalesDbContext> options) 
 
         modelBuilder.Entity<OrderEntity>(order =>
         {
-            order.ToTable("orders");
+            order.ToTable("orders", "ordering");
             order.HasKey(o => o.Id);
             order.Property(o => o.Id).HasColumnName("id");
             order.Property(o => o.BuyerId).HasColumnName("buyer_id");
@@ -51,7 +52,7 @@ public class FlashSalesDbContext(DbContextOptions<FlashSalesDbContext> options) 
 
         modelBuilder.Entity<OrderLineEntity>(line =>
         {
-            line.ToTable("order_lines");
+            line.ToTable("order_lines", "ordering");
             line.HasKey(l => l.Id);
             line.Property(l => l.Id).HasColumnName("id");
             line.Property(l => l.OrderId).HasColumnName("order_id");

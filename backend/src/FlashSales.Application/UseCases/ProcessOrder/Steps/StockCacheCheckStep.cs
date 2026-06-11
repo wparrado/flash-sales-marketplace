@@ -1,6 +1,6 @@
 using FlashSales.Application.Ports;
 using FlashSales.Domain.Catalog;
-using FlashSales.Domain.Shared;
+using FlashSales.SharedKernel;
 
 namespace FlashSales.Application.UseCases.ProcessOrder.Steps;
 

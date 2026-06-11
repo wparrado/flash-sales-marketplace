@@ -1,4 +1,4 @@
-using FlashSales.Domain.Shared;
+using FlashSales.SharedKernel;
 
 namespace FlashSales.Domain.Ordering.Commissions;
 
@@ -10,12 +10,6 @@ public interface ICommissionStrategy
 {
     /// <summary>Commission charged by the marketplace over the net (discounted) amount.</summary>
     Money Calculate(Money netAmount);
-}
-
-public enum SellerTier
-{
-    Standard,
-    Premium
 }
 
 public sealed class StandardCommissionStrategy : ICommissionStrategy

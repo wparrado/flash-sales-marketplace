@@ -6,12 +6,13 @@ using Microsoft.EntityFrameworkCore;
 namespace FlashSales.Infrastructure.Persistence;
 
 /// <summary>
-/// Write-model repository. Overselling is prevented here: the decrement is a
-/// single atomic conditional UPDATE — under any number of concurrent checkouts
-/// the database serializes row access, and the WHERE clause refuses the
-/// decrement once stock runs out. No read-modify-write window exists.
+/// Write-model repository + stock authority. Overselling is prevented here:
+/// the decrement is a single atomic conditional UPDATE — under any number of
+/// concurrent checkouts the database serializes row access, and the WHERE
+/// clause refuses the decrement once stock runs out. No read-modify-write
+/// window exists.
 /// </summary>
-public sealed class OfferRepository(FlashSalesDbContext db) : IOfferRepository, IStockReader
+public sealed class OfferRepository(FlashSalesDbContext db) : IOfferRepository, IStockAuthority, IStockReader
 {
     public async Task<Offer?> GetByIdAsync(Guid offerId, CancellationToken ct)
     {
@@ -25,7 +26,7 @@ public sealed class OfferRepository(FlashSalesDbContext db) : IOfferRepository, 
         // Data-modifying CTE so the statement stays composable for EF's SqlQuery.
         var remaining = await db.Database.SqlQuery<int>($@"
             WITH updated AS (
-                UPDATE offers
+                UPDATE inventory.offers
                 SET stock = stock - {quantity}
                 WHERE id = {offerId} AND stock >= {quantity}
                 RETURNING stock
@@ -36,9 +37,22 @@ public sealed class OfferRepository(FlashSalesDbContext db) : IOfferRepository, 
         return remaining.Count == 0 ? null : remaining[0];
     }
 
-    public Task RestoreStockAsync(Guid offerId, int quantity, CancellationToken ct) =>
-        db.Database.ExecuteSqlAsync(
-            $"UPDATE offers SET stock = stock + {quantity} WHERE id = {offerId}", ct);
+    public async Task<int> RestoreStockAsync(Guid offerId, int quantity, CancellationToken ct)
+    {
+        var restored = await db.Database.SqlQuery<int>($@"
+            WITH updated AS (
+                UPDATE inventory.offers
+                SET stock = stock + {quantity}
+                WHERE id = {offerId}
+                RETURNING stock
+            )
+            SELECT stock AS ""Value"" FROM updated")
+            .ToListAsync(ct);
+
+        return restored.Count == 0
+            ? throw new InvalidOperationException($"Cannot restore stock of unknown offer {offerId}")
+            : restored[0];
+    }
 
     public async Task<int?> ReadStockAsync(Guid offerId, CancellationToken ct)
     {

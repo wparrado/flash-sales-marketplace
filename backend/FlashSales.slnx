@@ -4,6 +4,7 @@
     <Project Path="src/FlashSales.Application/FlashSales.Application.csproj" />
     <Project Path="src/FlashSales.Domain/FlashSales.Domain.csproj" />
     <Project Path="src/FlashSales.Infrastructure/FlashSales.Infrastructure.csproj" />
+    <Project Path="src/FlashSales.SharedKernel/FlashSales.SharedKernel.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/FlashSales.ArchitectureTests/FlashSales.ArchitectureTests.csproj" />

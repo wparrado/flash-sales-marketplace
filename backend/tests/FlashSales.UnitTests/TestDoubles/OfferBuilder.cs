@@ -1,6 +1,6 @@
 using FlashSales.Domain.Catalog;
 using FlashSales.Domain.Ordering.Commissions;
-using FlashSales.Domain.Shared;
+using FlashSales.SharedKernel;
 
 namespace FlashSales.UnitTests.TestDoubles;
 

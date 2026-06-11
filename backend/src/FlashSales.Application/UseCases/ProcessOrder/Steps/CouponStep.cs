@@ -1,4 +1,4 @@
-using FlashSales.Domain.Shared;
+using FlashSales.SharedKernel;
 
 namespace FlashSales.Application.UseCases.ProcessOrder.Steps;
 

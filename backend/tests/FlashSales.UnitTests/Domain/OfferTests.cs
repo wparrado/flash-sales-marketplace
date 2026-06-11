@@ -1,6 +1,6 @@
 using AwesomeAssertions;
 using FlashSales.Domain.Catalog;
-using FlashSales.Domain.Shared;
+using FlashSales.SharedKernel;
 using FlashSales.UnitTests.TestDoubles;
 
 namespace FlashSales.UnitTests.Domain;

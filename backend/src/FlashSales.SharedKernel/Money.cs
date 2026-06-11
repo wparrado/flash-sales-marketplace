@@ -1,4 +1,4 @@
-namespace FlashSales.Domain.Shared;
+namespace FlashSales.SharedKernel;
 
 /// <summary>
 /// Immutable value object for monetary amounts. All arithmetic returns new

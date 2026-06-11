@@ -3,7 +3,7 @@ using FlashSales.Application.Ports;
 using FlashSales.Domain.Catalog;
 using FlashSales.Domain.Ordering;
 using FlashSales.Domain.Ordering.Commissions;
-using FlashSales.Domain.Shared;
+using FlashSales.SharedKernel;
 
 namespace FlashSales.Application.UseCases.ProcessOrder;
 
@@ -19,6 +19,7 @@ namespace FlashSales.Application.UseCases.ProcessOrder;
 public sealed class ProcessOrderHandler(
     IReadOnlyList<IOrderValidationStep> validationChain,
     IOfferRepository offers,
+    IStockAuthority stock,
     IOrderRepository orders,
     IPaymentGateway payments,
     IInventoryCache cache,
@@ -81,7 +82,7 @@ public sealed class ProcessOrderHandler(
         Offer offer, OrderContext context, CancellationToken ct) =>
         unitOfWork.WithinTransactionAsync(async innerCt =>
         {
-            var stockAfter = await offers.TryDecrementStockAsync(
+            var stockAfter = await stock.TryDecrementStockAsync(
                 offer.Id, context.Command.Quantity, innerCt);
 
             if (stockAfter is null)
@@ -129,7 +130,7 @@ public sealed class ProcessOrderHandler(
         Offer offer, StockReservation reservation, ProcessOrderCommand command,
         Contracts.PaymentResult payment, CancellationToken ct)
     {
-        await offers.RestoreStockAsync(offer.Id, command.Quantity, ct);
+        await stock.RestoreStockAsync(offer.Id, command.Quantity, ct);
         await cache.InvalidateAsync(offer.Id, ct);
         await orders.UpdateAsync(reservation.Order.Fail(payment.FailureReason ?? "payment.rejected"), ct);
 

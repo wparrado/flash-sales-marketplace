@@ -81,6 +81,45 @@ public class HexagonalArchitectureTests
         result.IsSuccessful.Should().BeTrue(BuildFailureMessage(result));
     }
 
+    // ---- Bounded-context isolation: the future microservice boundary ----
+    // Catalog and Ordering may only share the SharedKernel vocabulary; a
+    // dependency in either direction would entangle the future services.
+
+    [Fact]
+    public void CatalogContext_Should_Not_Depend_On_OrderingContext()
+    {
+        var result = Types.InAssembly(DomainAssembly)
+            .That().ResideInNamespaceStartingWith("FlashSales.Domain.Catalog")
+            .ShouldNot().HaveDependencyOnAny("FlashSales.Domain.Ordering")
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue(BuildFailureMessage(result));
+    }
+
+    [Fact]
+    public void OrderingContext_Should_Not_Depend_On_CatalogContext()
+    {
+        var result = Types.InAssembly(DomainAssembly)
+            .That().ResideInNamespaceStartingWith("FlashSales.Domain.Ordering")
+            .ShouldNot().HaveDependencyOnAny("FlashSales.Domain.Catalog")
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue(BuildFailureMessage(result));
+    }
+
+    [Fact]
+    public void SharedKernel_Should_Depend_On_Nothing()
+    {
+        var result = Types.InAssembly(typeof(SharedKernel.Money).Assembly)
+            .ShouldNot().HaveDependencyOnAny(
+                "FlashSales.Domain", ApplicationNamespace, InfrastructureNamespace, ApiNamespace,
+                "Microsoft.EntityFrameworkCore", "Microsoft.Extensions", "Microsoft.AspNetCore",
+                "Npgsql", "Polly")
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue(BuildFailureMessage(result));
+    }
+
     [Fact]
     public void Application_Ports_Should_Be_Interfaces()
     {

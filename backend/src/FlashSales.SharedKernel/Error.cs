@@ -1,4 +1,4 @@
-namespace FlashSales.Domain.Shared;
+namespace FlashSales.SharedKernel;
 
 /// <summary>Structured domain error: machine-readable code + human message.</summary>
 public sealed record Error(string Code, string Message)

@@ -1,4 +1,4 @@
-namespace FlashSales.Domain.Shared;
+namespace FlashSales.SharedKernel;
 
 /// <summary>
 /// Railway-oriented result type. Replaces null returns and exception-based

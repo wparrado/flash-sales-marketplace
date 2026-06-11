@@ -1,7 +1,7 @@
 using AwesomeAssertions;
 using FlashSales.Application.Contracts;
 using FlashSales.Application.Ports;
-using FlashSales.Domain.Shared;
+using FlashSales.SharedKernel;
 using FlashSales.Infrastructure.Payments;
 
 namespace FlashSales.UnitTests.Infrastructure;

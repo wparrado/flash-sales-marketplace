@@ -31,6 +31,7 @@ public class ProcessOrderHandlerTests
             new CouponStep()
         ],
         offers: _offers,
+        stock: _offers,
         orders: _orders,
         payments: _payments,
         cache: _cache,
@@ -42,7 +43,7 @@ public class ProcessOrderHandlerTests
     {
         var offer = new OfferBuilder()
             .WithStock(stock)
-            .WithPrice(FlashSales.Domain.Shared.Money.Usd(price))
+            .WithPrice(FlashSales.SharedKernel.Money.Usd(price))
             .WithWindow(Now.AddHours(-1), Now.AddHours(1))
             .Build();
         _offers.Seed(offer);

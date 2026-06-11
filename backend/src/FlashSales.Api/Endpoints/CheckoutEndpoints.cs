@@ -3,7 +3,7 @@ using FlashSales.Api.Contracts;
 using FlashSales.Api.Extensions;
 using FlashSales.Api.Middleware;
 using FlashSales.Application.UseCases.ProcessOrder;
-using FlashSales.Domain.Shared;
+using FlashSales.SharedKernel;
 
 namespace FlashSales.Api.Endpoints;
 

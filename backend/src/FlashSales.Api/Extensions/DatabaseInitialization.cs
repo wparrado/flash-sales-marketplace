@@ -1,4 +1,4 @@
-using FlashSales.Domain.Ordering.Commissions;
+using FlashSales.SharedKernel;
 using FlashSales.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 

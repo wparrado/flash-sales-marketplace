@@ -24,6 +24,7 @@ public static class DependencyInjection
         // Persistence adapters (write + read sides)
         services.AddScoped<OfferRepository>();
         services.AddScoped<IOfferRepository>(sp => sp.GetRequiredService<OfferRepository>());
+        services.AddScoped<IStockAuthority>(sp => sp.GetRequiredService<OfferRepository>());
         services.AddScoped<IStockReader>(sp => sp.GetRequiredService<OfferRepository>());
         services.AddScoped<IOrderRepository, OrderRepository>();
         services.AddScoped<IOfferReadRepository, OfferReadRepository>();
@@ -56,6 +57,7 @@ public static class DependencyInjection
         services.AddScoped<ProcessOrderHandler>(sp => new ProcessOrderHandler(
             sp.GetServices<IOrderValidationStep>().ToList(),
             sp.GetRequiredService<IOfferRepository>(),
+            sp.GetRequiredService<IStockAuthority>(),
             sp.GetRequiredService<IOrderRepository>(),
             sp.GetRequiredService<IPaymentGateway>(),
             sp.GetRequiredService<IInventoryCache>(),

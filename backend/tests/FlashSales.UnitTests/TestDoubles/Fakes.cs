@@ -7,7 +7,7 @@ using FlashSales.Domain.Ordering;
 namespace FlashSales.UnitTests.TestDoubles;
 
 /// <summary>Hand-rolled fakes: real behavior over mock setups, per testing guidelines.</summary>
-public sealed class InMemoryOfferRepository : IOfferRepository
+public sealed class InMemoryOfferRepository : IOfferRepository, IStockAuthority
 {
     private readonly ConcurrentDictionary<Guid, Offer> _offers = new();
 
@@ -36,12 +36,12 @@ public sealed class InMemoryOfferRepository : IOfferRepository
         }
     }
 
-    public Task RestoreStockAsync(Guid offerId, int quantity, CancellationToken ct)
+    public Task<int> RestoreStockAsync(Guid offerId, int quantity, CancellationToken ct)
     {
-        _offers.AddOrUpdate(offerId,
+        var restored = _offers.AddOrUpdate(offerId,
             _ => throw new InvalidOperationException("Cannot restore stock of unknown offer"),
             (_, current) => current with { Stock = current.Stock + quantity });
-        return Task.CompletedTask;
+        return Task.FromResult(restored.Stock);
     }
 }
 
