@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { catalogApi } from '../api/services'
-import type { OfferSummary } from '../api/types'
-import { Button } from '../components/atoms/Button'
-import { Price } from '../components/atoms/Price'
-import { Spinner } from '../components/atoms/Spinner'
-import { StockBadge } from '../components/atoms/StockBadge'
+import { catalogApi } from '@flashmkt/app-kernel'
+import type { OfferSummary } from '@flashmkt/app-kernel'
+import { Button } from '@flashmkt/design-system'
+import { Price } from '@flashmkt/design-system'
+import { Spinner } from '@flashmkt/design-system'
+import { StockBadge } from '@flashmkt/design-system'
 
 const STOCK_POLL_MS = 4000
 

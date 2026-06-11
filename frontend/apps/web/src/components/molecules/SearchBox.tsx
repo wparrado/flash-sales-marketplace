@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Input } from '../atoms/Input'
+import { Input } from '@flashmkt/design-system'
 
 const DEBOUNCE_MS = 300
 

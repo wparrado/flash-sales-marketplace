@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { catalogApi } from '../api/services'
-import type { OfferSummary } from '../api/types'
-import { Spinner } from '../components/atoms/Spinner'
+import { catalogApi } from '@flashmkt/app-kernel'
+import type { OfferSummary } from '@flashmkt/app-kernel'
+import { Spinner } from '@flashmkt/design-system'
 import { SearchBox } from '../components/molecules/SearchBox'
 import { OfferGrid } from '../components/organisms/OfferGrid'
 

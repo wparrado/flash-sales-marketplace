@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { FormEvent } from 'react'
-import { useAuth } from '../auth/auth-context'
-import { Button } from '../components/atoms/Button'
-import { Input } from '../components/atoms/Input'
+import { useAuth } from '@flashmkt/app-kernel'
+import { Button } from '@flashmkt/design-system'
+import { Input } from '@flashmkt/design-system'
 
 export default function LoginPage() {
   const { login } = useAuth()

@@ -1,0 +1,16 @@
+{
+  "name": "@flashmkt/design-system",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FLASH//MKT atomic design system: tokens + atoms. Future microfrontends consume this package to stay visually consistent.",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles.css": "./src/styles.css"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  }
+}

@@ -1,4 +1,4 @@
-import type { OfferSummary } from '../../api/types'
+import type { OfferSummary } from '@flashmkt/app-kernel'
 import { OfferCard } from '../molecules/OfferCard'
 
 export function OfferGrid({ offers }: { offers: OfferSummary[] }) {

@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
-import type { OfferSummary } from '../../api/types'
-import { Price } from '../atoms/Price'
-import { StockBadge } from '../atoms/StockBadge'
+import type { OfferSummary } from '@flashmkt/app-kernel'
+import { Price } from '@flashmkt/design-system'
+import { StockBadge } from '@flashmkt/design-system'
 
 function endsIn(endsAt: string): string {
   const ms = new Date(endsAt).getTime() - Date.now()

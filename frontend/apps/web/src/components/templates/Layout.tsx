@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import { Outlet } from 'react-router-dom'
-import { Spinner } from '../atoms/Spinner'
+import { Spinner } from '@flashmkt/design-system'
 import { Footer } from '../organisms/Footer'
 import { Header } from '../organisms/Header'
 

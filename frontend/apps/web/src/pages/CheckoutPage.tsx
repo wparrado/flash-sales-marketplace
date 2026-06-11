@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import type { FormEvent } from 'react'
-import { ApiError } from '../api/client'
-import { catalogApi, checkoutApi } from '../api/services'
-import type { OfferSummary, OrderResponse } from '../api/types'
-import { Button } from '../components/atoms/Button'
-import { Input } from '../components/atoms/Input'
-import { Price } from '../components/atoms/Price'
-import { Spinner } from '../components/atoms/Spinner'
+import { ApiError } from '@flashmkt/app-kernel'
+import { catalogApi, checkoutApi } from '@flashmkt/app-kernel'
+import type { OfferSummary, OrderResponse } from '@flashmkt/app-kernel'
+import { Button } from '@flashmkt/design-system'
+import { Input } from '@flashmkt/design-system'
+import { Price } from '@flashmkt/design-system'
+import { Spinner } from '@flashmkt/design-system'
 
 // Special methods exercise the backend resilience pipeline from the UI:
 // DeclinedCard → hard decline + stock compensation; FlakyCard → provider

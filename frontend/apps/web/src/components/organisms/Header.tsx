@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { useAuth } from '../../auth/auth-context'
-import { Button } from '../atoms/Button'
+import { useAuth } from '@flashmkt/app-kernel'
+import { Button } from '@flashmkt/design-system'
 
 const TICKER_ITEMS = '⚡ LIVE FLASH DROPS — LIMITED STOCK — NO RESTOCKS — '
 

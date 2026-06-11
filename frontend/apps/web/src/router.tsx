@@ -3,7 +3,7 @@
    boundaries live here on purpose. */
 import { lazy } from 'react'
 import { createBrowserRouter } from 'react-router-dom'
-import { ProtectedRoute } from './auth/ProtectedRoute'
+import { ProtectedRoute } from '@flashmkt/app-kernel'
 import { Layout } from './components/templates/Layout'
 
 // Route-level code splitting: each page is its own chunk, fetched on demand.
