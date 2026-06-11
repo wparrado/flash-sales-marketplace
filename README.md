@@ -78,19 +78,19 @@ flash-sales-marketplace/
 
 ```mermaid
 flowchart LR
-    subgraph DA["Driving adapters"]
+    subgraph Driving adapters
         UI[React SPA] --> API[Minimal API endpoints]
     end
-    subgraph AC["Application core"]
-        API --> UC["ProcessOrderHandler<br/>SearchOffers / GetOffer"]
-        UC --> D[("Domain<br/>pure &amp; immutable")]
-        UC -. ports .-> P["IOfferRepository · IStockAuthority<br/>IInventoryCache · ISearchEngine<br/>IPaymentGateway · IUnitOfWork · IOutbox"]
+    subgraph Application core
+        API --> UC[ProcessOrderHandler\nSearchOffers / GetOffer]
+        UC --> D[(Domain\npure & immutable)]
+        UC -. ports .-> P[IOfferRepository · IStockAuthority\nIInventoryCache · ISearchEngine\nIPaymentGateway · IUnitOfWork · IOutbox]
     end
-    subgraph DRV["Driven adapters"]
-        P --> PG[("PostgreSQL<br/>EF Core")]
-        P --> MC["IMemoryCache<br/>read-through"]
+    subgraph Driven adapters
+        P --> PG[(PostgreSQL\nEF Core)]
+        P --> MC[IMemoryCache\nread-through]
         P --> LV[Levenshtein index]
-        P --> PAY["Payment provider<br/>+ Polly pipeline"]
+        P --> PAY[Payment provider\n+ Polly pipeline]
     end
 ```
 
