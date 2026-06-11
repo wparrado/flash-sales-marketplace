@@ -1,6 +1,5 @@
-using System.Reflection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.OpenApi;
+using Microsoft.OpenApi;
 using Scalar.AspNetCore;
 
 namespace FlashSales.Api.Extensions;
@@ -11,49 +10,30 @@ public static class OpenApiExtensions
     {
         services.AddOpenApi(options =>
         {
-            options.AddDocumentTransformer(async (document, context, cancellationToken) =>
+            options.AddDocumentTransformer((document, context, _) =>
             {
-                document.Info ??= new();
-                document.Info.Title = "FLASH//MKT API";
-                document.Info.Version = "v1";
-                document.Info.Description = "Flash sales marketplace — catalog browsing, fuzzy search, and JWT-protected checkout.";
-
-                // Register Bearer JWT security scheme
-                document.Components ??= new();
-                if (document.Components is not null)
+                document.Info = new OpenApiInfo
                 {
-                    // Create OpenApiSecurityScheme instance dynamically
-                    var openApiAssembly = Assembly.Load("Microsoft.OpenApi");
-                    var securitySchemeType = openApiAssembly?.GetType("Microsoft.OpenApi.Models.OpenApiSecurityScheme");
+                    Title = "FLASH//MKT API",
+                    Version = "v1",
+                    Description = "Flash sales marketplace — catalog browsing, fuzzy search, and JWT-protected checkout."
+                };
 
-                    if (securitySchemeType != null)
+                document.Components = new OpenApiComponents
+                {
+                    SecuritySchemes = new Dictionary<string, IOpenApiSecurityScheme>
                     {
-                        dynamic scheme = Activator.CreateInstance(securitySchemeType)
-                            ?? throw new InvalidOperationException("Failed to create OpenApiSecurityScheme");
-
-                        // Set properties via reflection
-                        var securitySchemeTypeEnum = openApiAssembly?.GetType("Microsoft.OpenApi.Models.SecuritySchemeType");
-                        if (securitySchemeTypeEnum != null)
+                        ["Bearer"] = new OpenApiSecurityScheme
                         {
-                            var httpValue = Enum.Parse(securitySchemeTypeEnum, "Http");
-                            securitySchemeType.GetProperty("Type")?.SetValue(scheme, httpValue);
-                        }
-
-                        securitySchemeType.GetProperty("Scheme")?.SetValue(scheme, JwtBearerDefaults.AuthenticationScheme);
-                        securitySchemeType.GetProperty("BearerFormat")?.SetValue(scheme, "JWT");
-                        securitySchemeType.GetProperty("Description")?.SetValue(scheme, "Paste the JWT token obtained from `POST /api/auth/login`.");
-
-                        // Add to SecuritySchemes dictionary
-                        var securitySchemesProperty = document.Components.GetType().GetProperty("SecuritySchemes");
-                        var securitySchemes = securitySchemesProperty?.GetValue(document.Components);
-                        if (securitySchemes != null)
-                        {
-                            securitySchemes.GetType().GetMethod("Add")?.Invoke(securitySchemes, ["Bearer", scheme]);
+                            Type = SecuritySchemeType.Http,
+                            Scheme = JwtBearerDefaults.AuthenticationScheme,
+                            BearerFormat = "JWT",
+                            Description = "Paste the JWT token obtained from `POST /api/auth/login`."
                         }
                     }
-                }
+                };
 
-                await Task.CompletedTask;
+                return Task.CompletedTask;
             });
         });
 
