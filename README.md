@@ -21,8 +21,8 @@ docker compose up -d postgres            # + `--profile observability` for Jaege
 
 # 2. Backend  (http://localhost:5038)
 cd backend
-dotnet test                              # 51 unit + 6 architecture tests, no Docker needed
-dotnet test tests/FlashSales.IntegrationTests   # 12 tests, Testcontainers (needs Docker)
+dotnet test                              # 53 unit + 9 architecture tests, no Docker needed
+dotnet test tests/FlashSales.IntegrationTests   # 13 tests, Testcontainers (needs Docker)
 dotnet run --project src/FlashSales.Api
 
 # 3. Frontend (http://localhost:5173, /api proxied to 5038)
@@ -41,39 +41,37 @@ flash-sales-marketplace/
 ├── docker-compose.yml                  # postgres:17-alpine (+ jaeger, optional)
 ├── backend/
 │   ├── src/
-│   │   ├── FlashSales.Domain/          # PURE: zero package/project refs
+│   │   ├── FlashSales.SharedKernel/    # Money, Error, Result<T>, SellerTier — zero deps
+│   │   ├── FlashSales.Domain/          # PURE: → SharedKernel only
 │   │   │   ├── Catalog/Offer.cs        # immutable aggregate, Result-based transitions
-│   │   │   ├── Ordering/               # Order, OrderLine, OrderPricing (pure fn)
-│   │   │   │   └── Commissions/        # Strategy: Standard 10% / Premium 5%
-│   │   │   └── Shared/                 # Money, Error, Result<T> (railway-oriented)
+│   │   │   └── Ordering/               # Order, OrderLine, OrderPricing (pure fn)
+│   │   │       └── Commissions/        # Strategy: Standard 10% / Premium 5%
+│   │   │       # Catalog ↮ Ordering: contexts isolated by architecture tests
 │   │   ├── FlashSales.Application/     # → Domain only
-│   │   │   ├── Ports/                  # IOfferRepository, IInventoryCache, ISearchEngine,
-│   │   │   │                           # IPaymentGateway, IUnitOfWork, IOfferIndexUpdater…
-│   │   │   ├── Contracts/              # CQRS read DTOs (OfferSummary), payment contracts
+│   │   │   ├── Ports/                  # IOfferRepository, IStockAuthority, IInventoryCache,
+│   │   │   │                           # ISearchEngine, IPaymentGateway, IUnitOfWork, IOutbox…
+│   │   │   ├── Contracts/              # CQRS read DTOs, payment contracts, domain EVENTS
 │   │   │   └── UseCases/ProcessOrder/  # handler + Chain of Responsibility steps
 │   │   ├── FlashSales.Infrastructure/  # → Application (adapters)
-│   │   │   ├── Persistence/            # EF Core + Npgsql, atomic stock decrement, UoW
+│   │   │   ├── Persistence/            # EF Core + Npgsql (inventory/ordering schemas), UoW
+│   │   │   ├── Outbox/                 # transactional outbox + dispatcher (read-model relay)
 │   │   │   ├── Caching/                # read-through IMemoryCache inventory adapter
-│   │   │   ├── Search/                 # Levenshtein engine + index initializer/updater
+│   │   │   ├── Search/                 # Levenshtein engine + startup index hydration
 │   │   │   └── Payments/               # simulated provider + Polly v8 decorator
 │   │   └── FlashSales.Api/             # → composition root (driving adapter)
 │   │       ├── Endpoints/              # auth / catalog (reads) / checkout (writes)
 │   │       ├── Middleware/             # CorrelationIdMiddleware
 │   │       └── Extensions/             # JWT, bulkhead rate limiter, OpenTelemetry, seeding
 │   └── tests/
-│       ├── FlashSales.UnitTests/          # 51 tests — TDD red/green/refactor
-│       ├── FlashSales.ArchitectureTests/  # 6 NetArchTest dependency guardrails
-│       └── FlashSales.IntegrationTests/   # 12 tests — WebApplicationFactory + Testcontainers
-└── frontend/
-    └── src/
-        ├── api/          # types.ts (contract mirror), client.ts (fetch + correlation id)
-        ├── auth/         # AuthContext, useAuth, ProtectedRoute (JWT)
-        ├── components/
-        │   ├── atoms/     # Button, Input, Price, Spinner, StockBadge
-        │   ├── molecules/ # SearchBox (debounced), OfferCard
-        │   ├── organisms/ # Header, Footer, OfferGrid
-        │   └── templates/ # Layout (single Suspense boundary)
-        └── pages/        # Catalog / OfferDetail / Checkout / Login — all React.lazy
+│       ├── FlashSales.UnitTests/          # 53 tests — TDD red/green/refactor
+│       ├── FlashSales.ArchitectureTests/  # 9 NetArchTest guardrails (layers + contexts)
+│       └── FlashSales.IntegrationTests/   # 13 tests — WebApplicationFactory + Testcontainers
+└── frontend/                           # npm workspaces — microfrontend-ready seams
+    ├── apps/web/                       # the SPA shell: pages (React.lazy), molecules,
+    │                                   # organisms, Layout, router
+    ├── packages/design-system/         # @flashmkt/design-system: tokens + atoms
+    └── packages/app-kernel/            # @flashmkt/app-kernel: typed API contract,
+                                        # correlation-id fetch client, JWT auth
 ```
 
 ## Architecture
@@ -86,7 +84,7 @@ flowchart LR
     subgraph Application core
         API --> UC[ProcessOrderHandler\nSearchOffers / GetOffer]
         UC --> D[(Domain\npure & immutable)]
-        UC -. ports .-> P[IOfferRepository · IInventoryCache\nISearchEngine · IPaymentGateway\nIUnitOfWork · IOfferIndexUpdater]
+        UC -. ports .-> P[IOfferRepository · IStockAuthority\nIInventoryCache · ISearchEngine\nIPaymentGateway · IUnitOfWork · IOutbox]
     end
     subgraph Driven adapters
         P --> PG[(PostgreSQL\nEF Core)]
@@ -103,12 +101,13 @@ flowchart LR
 | | Reads (catalog/search) | Writes (checkout) |
 |---|---|---|
 | Model | `OfferSummary` flat DTOs | `Offer` / `Order` aggregates |
-| Store | in-memory index + cache, `AsNoTracking` projections | PostgreSQL, transactional |
-| Consistency | eventually consistent (5s TTL, in-process index updates) | strict (atomic conditional UPDATE) |
+| Store | in-memory index + cache, `AsNoTracking` projections | PostgreSQL (`inventory`/`ordering` schemas), transactional |
+| Consistency | eventual: **transactional outbox** projects `OfferStockChanged` events onto cache + index | strict (atomic conditional UPDATE + idempotency keys) |
 | Scale path | Redis / Elasticsearch adapters | partitioned Postgres / event sourcing |
 
-Moving to full CQRS + Event Sourcing means swapping driven adapters and emitting the
-already-modelled "stock changed" notification through an outbox — no domain changes.
+The write side already emits explicit, versionable domain events through a
+transactional outbox; pointing the dispatcher at a message broker (instead of
+the in-process read models) is the entire microservices migration of this seam.
 
 ---
 
@@ -160,7 +159,7 @@ limiter.AddConcurrencyLimiter("checkout", o => { o.PermitLimit = 10; o.QueueLimi
 // catalog/search endpoints: unlimited — saturation there cannot stop invoicing
 ```
 
-**Inventory cache** (read-through / cache-aside): stock reads are served from process memory in microseconds; only a miss touches Postgres; checkout write-throughs the post-commit value ([InMemoryInventoryCache.cs](backend/src/FlashSales.Infrastructure/Caching/InMemoryInventoryCache.cs)).
+**Inventory cache** (read-through / cache-aside): stock reads are served from process memory in microseconds; only a miss touches Postgres; committed stock changes reach the cache through the outbox-projected `OfferStockChanged` events ([InMemoryInventoryCache.cs](backend/src/FlashSales.Infrastructure/Caching/InMemoryInventoryCache.cs), [OutboxDispatcher.cs](backend/src/FlashSales.Infrastructure/Outbox/OutboxDispatcher.cs)).
 
 ### 3 · ProcessOrder — TDD + Chain of Responsibility + functional core
 
@@ -214,7 +213,7 @@ public void Domain_Should_Be_Pure_No_Framework_Or_Persistence_Dependencies()
 
 ### 5 · Correlation-ID end to end
 
-Frontend mints a UUID per request ([client.ts](frontend/src/api/client.ts)); the middleware echoes it, tags the OTel span, and scopes every log line ([CorrelationIdMiddleware.cs](backend/src/FlashSales.Api/Middleware/CorrelationIdMiddleware.cs)):
+Frontend mints a UUID per request ([client.ts](frontend/packages/app-kernel/src/api/client.ts)); the middleware echoes it, tags the OTel span, and scopes every log line ([CorrelationIdMiddleware.cs](backend/src/FlashSales.Api/Middleware/CorrelationIdMiddleware.cs)):
 
 ```csharp
 context.Items[ItemKey] = correlationId;
@@ -238,20 +237,22 @@ docker compose --profile observability up -d   # Jaeger UI on :16686
 
 ## Contract testing strategy
 
-`frontend/src/api/types.ts` is the consumer contract. [`ContractShapeTests.cs`](backend/tests/FlashSales.IntegrationTests/ContractShapeTests.cs) re-declares the same shapes **from the consumer's perspective** and runs against the live API in CI: a renamed field, a type change, or a casing regression breaks the backend build *before* the frontend ever sees a malformed payload. (Scale path: publish these as Pact contracts; the seam already exists.)
+`frontend/packages/app-kernel/src/api/types.ts` is the consumer contract. [`ContractShapeTests.cs`](backend/tests/FlashSales.IntegrationTests/ContractShapeTests.cs) re-declares the same shapes **from the consumer's perspective** and runs against the live API in CI: a renamed field, a type change, or a casing regression breaks the backend build *before* the frontend ever sees a malformed payload. (Scale path: publish these as Pact contracts; the seam already exists.)
 
 ## Test matrix
 
 | Suite | Count | Scope | Needs Docker |
 |---|---|---|---|
-| Unit | 51 | Domain math, Result monad, ProcessOrder TDD list, fuzzy search, cache wrapper, Polly pipeline | no |
-| Architecture | 6 | hexagonal dependency rules, ports-are-interfaces | no |
-| Integration | 12 | HTTP→Postgres full flow, oversell race, auth, correlation, contract shapes | yes |
+| Unit | 53 | Domain math, Result monad, ProcessOrder TDD list (incl. idempotent replay + outbox events), fuzzy search, cache wrapper, Polly pipeline | no |
+| Architecture | 9 | hexagonal dependency rules, ports-are-interfaces, Catalog↮Ordering context isolation, SharedKernel purity | no |
+| Integration | 13 | HTTP→Postgres full flow, oversell race, idempotent replay, outbox projection (eventual consistency), auth, correlation, contract shapes | yes |
 
 ## Key design decisions
 
 1. **Overselling**: solved at the database with one atomic conditional `UPDATE … RETURNING`; the cache is an advisory fast-path only. A request may pass the cache check and still get a 409 — that is correct behavior, not a bug.
-2. **Cache updates**: write-through *after* commit; on payment compensation the key is invalidated (never recomputed in-flight) so the next read repopulates from the source of truth.
-3. **Two bulkhead layers**: HTTP concurrency limiter scoped to checkout (entry), Polly timeout + breaker around the payment dependency (exit).
-4. **No MediatR / no mocking framework**: handlers are plain classes; test doubles are hand-rolled fakes + Builder-pattern data builders — fewer moving parts, honest tests.
-5. **EnsureCreated + seed** keeps the demo self-contained; the production path is versioned EF migrations run by the delivery pipeline.
+2. **Read models follow events, not calls**: every committed stock change writes an `OfferStockChanged` event to the outbox *in the same transaction*; the dispatcher projects it onto the cache and search index. No crash window between "stock committed" and "read models updated", and the broker-based future needs no new concepts.
+3. **Idempotent checkout**: an optional `Idempotency-Key` header makes retries safe — the handler returns the recorded outcome, a filtered unique index backstops races. Required groundwork for at-least-once messaging between services.
+4. **Two bulkhead layers**: HTTP concurrency limiter scoped to checkout (entry), Polly timeout + breaker around the payment dependency (exit).
+5. **Extractable by construction**: SharedKernel package, `IStockAuthority` as the future inventory-service API, per-context DB schemas, and Catalog↮Ordering isolation enforced by architecture tests.
+6. **No MediatR / no mocking framework**: handlers are plain classes; test doubles are hand-rolled fakes + Builder-pattern data builders — fewer moving parts, honest tests.
+7. **EnsureCreated + seed** keeps the demo self-contained; the production path is versioned EF migrations run by the delivery pipeline.

@@ -1,7 +1,7 @@
 namespace FlashSales.Api.Contracts;
 
 // The API contract layer. These records ARE the contract mirrored by
-// frontend/src/api/types.ts — contract-shape integration tests pin them.
+// frontend/packages/app-kernel/src/api/types.ts — contract-shape integration tests pin them.
 
 public sealed record LoginRequest(string Username, string Password);
 

@@ -25,9 +25,11 @@ The inventory cache (read-through, 5s TTL, write-through after commit) serves br
 
 Payment runs *outside* the database transaction (an external call inside a DB transaction is how you turn a provider outage into connection-pool exhaustion). Flow: reserve stock + persist `PendingPayment` order (tx1) → charge → confirm (tx2) or compensate (restore stock, invalidate cache, persist `Failed` order). The failed order is kept for audit, mirroring real marketplaces.
 
-## ADR-5 · In-process index update now, outbox later
+## ADR-5 · Transactional outbox for read-model propagation
 
-`IOfferIndexUpdater` is invoked after commit to refresh the search read model. In-process is exactly right for a single node and keeps the demo honest. The moment this becomes multi-instance, the same port is implemented by an outbox table + relay (the event is already modelled — `OfferStockChanged`), which is also the Event Sourcing on-ramp.
+Every committed stock change enqueues an explicit `OfferStockChanged` record into `ordering.outbox_messages` **inside the reservation transaction** — the event exists if and only if the business change committed. A polling dispatcher (`OutboxDispatcher`, 300ms) projects pending events onto the inventory cache and search index, then marks them processed.
+
+Why now and not "later": the previous in-process call had a crash window (commit succeeds, process dies, read models stale until TTL) and the event was implicit in a method signature. With the outbox, the events are durable, replayable, versionable records — the exact message contracts a broker relay publishes when the system goes multi-instance. Single-instance assumption is documented in code; `FOR UPDATE SKIP LOCKED` is the known upgrade for competing dispatchers.
 
 ## ADR-6 · Resilience policy placement
 
@@ -42,6 +44,20 @@ Money math, pricing, commission strategies and state transitions are pure (`Orde
 ## ADR-8 · Test strategy
 
 - **TDD discipline:** every behavior in Domain/Application/Search/Cache/Polly was written test-first (the git history shows the red-green increments).
-- **Architecture tests** are guardrails, not documentation — they fail the PR that breaks the dependency rule.
-- **Integration tests** run the real composition root against a real PostgreSQL (Testcontainers, singleton container) — including the 20-buyers-5-units race that proves the oversell invariant under true parallelism.
-- **Contract-shape tests** mirror `frontend/src/api/types.ts` from the consumer side; payload-breaking changes fail the backend CI first.
+- **Architecture tests** are guardrails, not documentation — they fail the PR that breaks the dependency rule or entangles the Catalog/Ordering contexts.
+- **Integration tests** run the real composition root against a real PostgreSQL (Testcontainers, singleton container) — including the 20-buyers-5-units race that proves the oversell invariant under true parallelism, the idempotent replay, and the outbox projection under eventual consistency.
+- **Contract-shape tests** mirror `frontend/packages/app-kernel/src/api/types.ts` from the consumer side; payload-breaking changes fail the backend CI first.
+
+## ADR-9 · Idempotent checkout
+
+Clients may send an `Idempotency-Key` header (the frontend can mint one per purchase intent). The handler returns the recorded outcome for a replayed key without reserving stock or charging again; a filtered unique index on `(buyer_id, idempotency_key)` backstops concurrent duplicates. This protects real users today (double click, network retry) and is the prerequisite for at-least-once message delivery between future services.
+
+## ADR-10 · Extractability seams, paid for up front
+
+Cheap decisions made while everything is still one process, so a future split is additive:
+
+- **SharedKernel project** (`Money`, `Result`, `Error`, `SellerTier`): services reference a small package instead of dragging the whole Domain; enforced dependency-free by an architecture test.
+- **Bounded-context isolation**: `Domain.Catalog` ↮ `Domain.Ordering` enforced by NetArchTest in both directions; the shared vocabulary lives in the kernel.
+- **`IStockAuthority`** split from `IOfferRepository`: the interface IS the future inventory-service API; extraction = implement it over HTTP/gRPC.
+- **Per-context schemas** (`inventory.*`, `ordering.*`), no cross-schema foreign keys: database-per-service becomes a dump-per-schema, not surgery.
+- **Frontend workspaces**: `@flashmkt/design-system` (tokens + atoms) and `@flashmkt/app-kernel` (contract types, correlation-id client, auth) are the packages a microfrontend shell shares as federated singletons; route-level lazy chunks are the remote boundaries.

@@ -8,7 +8,7 @@ namespace FlashSales.IntegrationTests;
 
 /// <summary>
 /// Consumer-driven contract tests: these records are written from the
-/// CONSUMER's perspective and mirror frontend/src/api/types.ts. If a backend
+/// CONSUMER's perspective and mirror frontend/packages/app-kernel/src/api/types.ts. If a backend
 /// change reshapes a payload (rename, removal, type change), these break in CI
 /// before the frontend ever sees a malformed response.
 /// </summary>
@@ -18,7 +18,7 @@ public sealed class ContractShapeTests(PostgresFixture postgres) : IAsyncLifetim
     private FlashSalesApiFactory _factory = null!;
     private HttpClient _client = null!;
 
-    // --- Contract mirror (keep in sync with frontend/src/api/types.ts) ---
+    // --- Contract mirror (keep in sync with frontend/packages/app-kernel/src/api/types.ts) ---
     private sealed record OfferSummaryContract(
         Guid Id, string Name, string Description, decimal Price,
         string Currency, int Stock, DateTimeOffset EndsAt);
