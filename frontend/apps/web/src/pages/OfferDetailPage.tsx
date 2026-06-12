@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { catalogApi } from '@flashmkt/app-kernel'
 import type { OfferSummary } from '@flashmkt/app-kernel'
 import { Button } from '@flashmkt/design-system'
 import { Price } from '@flashmkt/design-system'
 import { Spinner } from '@flashmkt/design-system'
 import { StockBadge } from '@flashmkt/design-system'
+import { ConfirmModal, useConfirmModal } from '../components/molecules/ConfirmModal'
 
 const STOCK_POLL_MS = 4000
 
@@ -14,6 +15,8 @@ export default function OfferDetailPage() {
   const [offer, setOffer] = useState<OfferSummary | null>(null)
   const [liveStock, setLiveStock] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const { isOpen, open, close } = useConfirmModal()
+  const navigate = useNavigate()
 
   useEffect(() => {
     if (!offerId) return
@@ -49,9 +52,15 @@ export default function OfferDetailPage() {
         <p>
           <Price amount={offer.price} currency={offer.currency} className="offer-card__price" />
         </p>
-        <Link to={soldOut ? '#' : `/checkout/${offer.id}`}>
-          <Button disabled={soldOut}>{soldOut ? 'Sold out' : 'Buy now'}</Button>
-        </Link>
+        <Button disabled={soldOut} onClick={soldOut ? undefined : open}>
+          {soldOut ? 'Sold out' : 'Buy now'}
+        </Button>
+        <ConfirmModal
+          isOpen={isOpen}
+          message="Are you sure you want to buy this item?"
+          onConfirm={() => navigate(`/checkout/${offer.id}`)}
+          onCancel={close}
+        />
       </div>
     </div>
   )
